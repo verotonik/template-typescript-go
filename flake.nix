@@ -1,48 +1,52 @@
 {
-  description = "garnix example server with a typescript frontend and a go backend";
-
-  # Add your nix dependencies here.
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.05";
     garnix-lib.url = "github:garnix-io/garnix-lib";
-    flake-utils.url = "github:numtide/flake-utils";
-    npmlock2nix-repo = {
-      url = "github:nix-community/npmlock2nix";
-      flake = false;
-    };
+    Haskell.url = "github:garnix-io/haskell-module";
+    NodeJS.url = "github:garnix-io/nodejs-module";
+    PostgreSQL.url = "github:garnix-io/postgresql-module";
   };
 
-  outputs = inputs:
-    inputs.flake-utils.lib.eachSystem [ "x86_64-linux" "aarch64-darwin" ]
-      (system:
-        let
-          pkgs = import inputs.nixpkgs { inherit system; };
-        in
-        {
-          # Here you can define packages that your flake outputs.
-          packages = {
-            # This imports `./frontend/default.nix` which defines a nix package
-            # that builds the frontend bundle. This will be served as static
-            # files by the server.
-            frontend-bundle = pkgs.callPackage ./frontend { self = inputs.self; };
-            backend = pkgs.callPackage ./backend { };
-          };
-          devShells.default = pkgs.mkShell
-            {
-              nativeBuildInputs = [ pkgs.nodejs pkgs.go pkgs.gopls ];
-            };
-        })
-    //
-    {
-      nixosConfigurations.server = inputs.nixpkgs.lib.nixosSystem {
-        modules = [
-          inputs.garnix-lib.nixosModules.garnix
-          {
-            _module.args = { self = inputs.self; };
-          }
-          # This is where the server is defined.
-          ./hosts/server.nix
-        ];
+  nixConfig = {
+    extra-substituters = [ "https://cache.garnix.io" ];
+    extra-trusted-public-keys = [ "cache.garnix.io:CTFPyKSLcx5RMJKfLo5EEPUObbA78b0YQ2DTCJXqr9g=" ];
+  };
+
+  outputs = inputs: inputs.garnix-lib.lib.mkModules {
+    modules = [
+      inputs.Haskell.garnixModules.default
+      inputs.NodeJS.garnixModules.default
+      inputs.PostgreSQL.garnixModules.default
+    ];
+
+    config = { pkgs, ... }: {
+      haskell = {
+        haskell-project = {
+          buildDependencies = [  ];
+          devTools = [  ];
+          ghcVersion = "9.8";
+          runtimeDependencies = [  ];
+          src = ./.;
+          webServer = null;
+        };
       };
+      nodejs = {
+        nodejs-project = {
+          buildDependencies = [  ];
+          devTools = [  ];
+          prettier = true;
+          runtimeDependencies = [  ];
+          src = ./.;
+          testCommand = "npm run test";
+          webServer = null;
+        };
+      };
+      postgresql = {
+        postgresql-project = {
+          port = 5432;
+        };
+      };
+
+      garnix.deployBranch = "main";
     };
+  };
 }
